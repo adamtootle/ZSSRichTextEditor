@@ -467,4 +467,10 @@ zss_editor.focusEditor = function() {
 
 zss_editor.blurEditor = function() {
     $('#zss_editor_content').blur();
-}//end
+}
+
+zss_editor.addCSS = function(css) {
+    $('style').append(css);
+}
+
+//end

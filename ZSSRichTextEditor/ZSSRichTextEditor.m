@@ -524,6 +524,12 @@ static Class hackishFixClass = Nil;
     [self.editorView stringByEvaluatingJavaScriptFromString:js];
 }
 
+- (void)addCSS:(NSString *)css
+{
+    NSString *js = [NSString stringWithFormat:@"zss_editor.addCSS('%@');", css];
+    [self.editorView stringByEvaluatingJavaScriptFromString:js];
+}
+
 #pragma mark - Editor Interaction
 
 - (void)setHtml:(NSString *)html {

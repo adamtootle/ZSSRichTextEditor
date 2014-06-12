@@ -103,9 +103,14 @@ typedef NS_ENUM(NSInteger, ZSSRichTextEditorToolbar) {
 - (void)focusTextEditor;
 
 /**
- *  Manually focuses on the text editor
+ *  Manually blurs on the text editor
  */
 - (void)blurTextEditor;
+
+/**
+ *  Append css to the <style> tag
+ */
+- (void)addCSS:(NSString*)css;
 
 /**
  *  Shows the insert image dialog with optinal inputs
