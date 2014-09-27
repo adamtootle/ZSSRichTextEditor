@@ -1,17 +1,19 @@
 /*!
  *
- * ZSSRichTextEditor v1.0
+ * ZSSRichTextEditor v0.5.1
  * http://www.zedsaid.com
  *
- * Copyright 2013 Zed Said Studio
+ * Copyright 2014 Zed Said Studio LLC
  *
  */
 
-// The editor object
 var zss_editor = {};
 
 // If we are using iOS or desktop
 zss_editor.isUsingiOS = true;
+
+// If the user is draging
+zss_editor.isDragging = false;
 
 // The current selection
 zss_editor.currentSelection;
@@ -25,25 +27,147 @@ zss_editor.currentEditingLink;
 // The objects that are enabled
 zss_editor.enabledItems = {};
 
+// Height of content window, will be set by viewController
+zss_editor.contentHeight = 244;
+
+// Sets to true when extra footer gap shows and requires to hide
+zss_editor.updateScrollOffset = false;
+
 /**
  * The initializer function that must be called onLoad
  */
 zss_editor.init = function() {
-	
-	// Main editor div
-	var editor = $('#zss_editor_content');
-	editor.trigger('touchstart');
-	
-	// Bind an event so we always know what styles are applied
-	editor.bind('touchend', function(e) {
-		zss_editor.enabledEditingItems(e);
-		var clicked = $(e.target);
-		if (!clicked.hasClass('zs_active')) {
-			$('img').removeClass('zs_active');
+    
+    $('#zss_editor_content').on('touchend', function(e) {
+    	zss_editor.enabledEditingItems(e);
+    	var clicked = $(e.target);
+    	if (!clicked.hasClass('zs_active')) {
+    		$('img').removeClass('zs_active');
+    	}
+    });
+    
+    $(document).on('selectionchange',function(e){
+		zss_editor.calculateEditorHeightWithCaretPosition();
+		zss_editor.setScrollPosition();
+	});
+    
+    $(window).on('scroll', function(e) {
+    	zss_editor.updateOffset();
+    });
+    
+    // Make sure that when we tap anywhere in the document we focus on the editor
+    $(window).on('touchmove', function(e) {
+		zss_editor.isDragging = true;
+        zss_editor.updateScrollOffset = true;
+        zss_editor.setScrollPosition();
+	});
+    $(window).on('touchstart', function(e) {
+		zss_editor.isDragging = false;
+	});
+    $(window).on('touchend', function(e) {
+		if (!zss_editor.isDragging) {
+			zss_editor.focusEditor();
 		}
 	});
-			
+    
 }//end
+
+zss_editor.updateOffset = function() {
+    
+    if (!zss_editor.updateScrollOffset)
+        return;
+    
+    var offsetY = window.document.body.scrollTop;
+    
+    var footer = $('#zss_editor_footer');
+    
+    var maxOffsetY = footer.offset().top - zss_editor.contentHeight;
+    
+    if (maxOffsetY < 0)
+        maxOffsetY = 0;
+    
+    if (offsetY > maxOffsetY)
+    {
+        window.scrollTo(0, maxOffsetY);
+    }
+    
+    zss_editor.setScrollPosition();
+}
+
+// This will show up in the XCode console as we are able to push this into an NSLog.
+zss_editor.debug = function(msg) {
+	window.location = 'debug://'+msg;
+}
+
+
+zss_editor.setScrollPosition = function() {
+	var position = window.pageYOffset;
+	window.location = 'scroll://'+position;
+}
+
+
+zss_editor.setPlaceholder = function(placeholder) {
+
+    var editor = $('#zss_editor_content');
+    
+	//set placeHolder
+    if(editor.text().length == 1){
+        editor.text(placeholder);
+        editor.css("color","gray");
+    }
+    //set focus
+    editor.focus(function(){
+    	if($(this).text() == placeholder){
+    		$(this).text("");
+			$(this).css("color","black");
+    	}
+    }).focusout(function(){
+    	if(!$(this).text().length){
+    		$(this).text(placeholder);
+			$(this).css("color","gray");
+    	}
+    });
+
+}
+
+zss_editor.setFooterHeight = function(footerHeight) {
+    var footer = $('#zss_editor_footer');
+    footer.height(footerHeight + 'px');
+}
+
+zss_editor.getCaretYPosition = function() {
+    var sel = window.getSelection();
+    // Next line is comented to prevent deselecting selection. It looks like work but if there are any issues will appear then uconmment it as well as code above.
+	//sel.collapseToStart();
+    var range = sel.getRangeAt(0);
+    var span = document.createElement('span');
+    range.insertNode(span);
+    var topPosition = span.offsetTop;
+    span.parentNode.removeChild(span);
+    return topPosition;
+}
+
+zss_editor.calculateEditorHeightWithCaretPosition = function() {
+    
+    var padding = 50;
+    var c = zss_editor.getCaretYPosition();
+    var e = document.getElementById('zss_editor_content');
+
+    var editor = $('#zss_editor_content');
+    
+    var offsetY = window.document.body.scrollTop;
+    var height = zss_editor.contentHeight;
+    
+    var newPos = window.pageYOffset;
+    
+    if (c < offsetY) {
+        newPos = c;
+    } else if (c > (offsetY + height - padding)) {
+        var newPos = c - height + padding - 18;
+    }
+    
+    window.scrollTo(0, newPos);
+}
 
 zss_editor.backuprange = function(){
 	var selection = window.getSelection();
@@ -59,6 +183,23 @@ zss_editor.restorerange = function(){
     range.setEnd(zss_editor.currentSelection.endContainer, zss_editor.currentSelection.endOffset);
     selection.addRange(range);
 }
+
+zss_editor.getSelectedNode = function() {
+    var node,selection;
+    if (window.getSelection) {
+        selection = getSelection();
+        node = selection.anchorNode;
+    }
+    if (!node && document.selection) {
+        selection = document.selection
+        var range = selection.getRangeAt ? selection.getRangeAt(0) : selection.createRange();
+        node = range.commonAncestorContainer ? range.commonAncestorContainer :
+        range.parentElement ? range.parentElement() : range.item(0);
+    }
+    if (node) {
+        return (node.nodeName == "#text" ? node.parentNode : node);
+    }
+};
 
 zss_editor.setBold = function() {
 	document.execCommand('bold', false, null);
@@ -106,12 +247,30 @@ zss_editor.setHorizontalRule = function() {
 }
 
 zss_editor.setHeading = function(heading) {
-	document.execCommand('formatBlock', false, '<'+heading+'>');
+    var current_selection = $(zss_editor.getSelectedNode());
+    var t = current_selection.prop("tagName").toLowerCase();
+    var is_heading = (t == 'h1' || t == 'h2' || t == 'h3' || t == 'h4' || t == 'h5' || t == 'h6');
+    if (is_heading && heading == t) {
+        var c = current_selection.html();
+        current_selection.replaceWith(c);
+    } else {
+        document.execCommand('formatBlock', false, '<'+heading+'>');
+    }
+	
 	zss_editor.enabledEditingItems();
 }
 
 zss_editor.setParagraph = function() {
-	document.execCommand('formatBlock', false, '<p>');
+    var current_selection = $(zss_editor.getSelectedNode());
+    var t = current_selection.prop("tagName").toLowerCase();
+    var is_paragraph = (t == 'p');
+    if (is_paragraph) {
+        var c = current_selection.html();
+        current_selection.replaceWith(c);
+    } else {
+        document.execCommand('formatBlock', false, '<p>');
+    }
+    
 	zss_editor.enabledEditingItems();
 }
 
@@ -268,14 +427,14 @@ zss_editor.quickLink = function() {
 			link_url = sel;
 		}
 	}
-
+    
 	var html_code = '<a href="' + link_url + '">' + sel + '</a>';
 	zss_editor.insertHTML(html_code);
 	
 }
 
 zss_editor.prepareInsert = function() {
-	zss_editor.backuprange();	
+	zss_editor.backuprange();
 }
 
 zss_editor.insertImage = function(url, alt) {
@@ -316,20 +475,24 @@ zss_editor.getHTML = function() {
     var bq = $('blockquote');
     if (bq.length != 0) {
         bq.each(function() {
-            var b = $(this);
+			var b = $(this);
 			if (b.css('border').indexOf('none') != -1) {
 				b.css({'border': ''});
 			}
 			if (b.css('padding').indexOf('0px') != -1) {
 				b.css({'padding': ''});
 			}
-        });
+		});
     }
-
+    
 	// Get the contents
 	var h = document.getElementById("zss_editor_content").innerHTML;
+    
+	return h;
+}
 
-	return h; 
+zss_editor.getText = function() {
+	return $('#zss_editor_content').text();
 }
 
 zss_editor.isCommandEnabled = function(commandName) {
@@ -341,7 +504,7 @@ zss_editor.enabledEditingItems = function(e) {
 	var items = [];
 	if (zss_editor.isCommandEnabled('bold')) {
 		items.push('bold');
-	} 
+	}
 	if (zss_editor.isCommandEnabled('italic')) {
 		items.push('italic');
 	}
@@ -384,18 +547,16 @@ zss_editor.enabledEditingItems = function(e) {
 	}
     // Images
 	$('img').bind('touchstart', function(e) {
-        $('img').removeClass('zs_active');
-        $(this).addClass('zs_active');
-    });
+		$('img').removeClass('zs_active');
+		$(this).addClass('zs_active');
+	});
 	
 	// Use jQuery to figure out those that are not supported
 	if (typeof(e) != "undefined") {
-		//alert($(e.target).css('textAlign'));
 		
 		// The target element
 		var t = $(e.target);
 		var nodeName = e.target.nodeName.toLowerCase();
-        console.log(nodeName);
 		
 		// Background Color
 		var bgColor = t.css('backgroundColor');
@@ -434,7 +595,7 @@ zss_editor.enabledEditingItems = function(e) {
         } else {
             zss_editor.currentEditingImage = null;
         }
-			
+        
 	}
 	
 	if (items.length > 0) {
@@ -454,15 +615,17 @@ zss_editor.enabledEditingItems = function(e) {
 }
 
 zss_editor.focusEditor = function() {
+    
     // the following was taken from http://stackoverflow.com/questions/1125292/how-to-move-cursor-to-end-of-contenteditable-entity/3866442#3866442
     // and ensures we move the cursor to the end of the editor
+    var editor = $('#zss_editor_content');
     var range = document.createRange();
-    range.selectNodeContents($('#zss_editor_content').get(0));
+    range.selectNodeContents(editor.get(0));
     range.collapse(false);
     var selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    $('#zss_editor_content').focus();
+    editor.focus();
 }
 
 zss_editor.blurEditor = function() {
